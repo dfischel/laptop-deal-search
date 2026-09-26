@@ -1,0 +1,11 @@
+{
+  "alerted": {},
+  "finished": false,
+  "last_keepalive": "2026-09-26",
+  "reminders_sent": [],
+  "source_failures": {
+    "dealnews": 0,
+    "newegg": 0,
+    "slickdeals": 0
+  }
+}
