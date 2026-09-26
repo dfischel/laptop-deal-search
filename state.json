@@ -1,7 +1,7 @@
 {
   "alerted": {},
   "finished": false,
-  "last_keepalive": "2026-09-26",
+  "last_canary_week": "2026-W39",
   "reminders_sent": [],
   "source_failures": {
     "dealnews": 0,
