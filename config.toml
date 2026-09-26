@@ -1,0 +1,100 @@
+# Laptop deal monitor settings.
+# Edit this file (on github.com: open it, click the pencil icon, then "Commit changes").
+# The next scheduled run uses the new values.
+
+[project]
+# Last day to return the Acer to Costco. The day after, the monitor sends a final
+# notice and switches itself off.
+return_deadline = "2026-12-24"
+
+[criteria]
+max_price = 850
+min_ram_gb = 32
+min_storage_gb = 1000          # 1000 = 1TB
+screen_min_in = 14
+screen_max_in = 16.2           # 16-inch class; some 16" laptops are listed as 16.1"
+require_thunderbolt_or_usb4 = true
+
+# A listing matches if ANY of these patterns appears in its text (case-insensitive).
+# They're regular expressions: \s* means "optional space", [79] means "7 or 9", \d means "any digit".
+cpu_allowed = [
+  # Intel Core Ultra 7/9, Series 2: 258V, 268V, 288V (yours), 255H, 265H, 285H, 275HX...
+  'ultra\s*[79][\s-]*2[5-9]\d\s*(v|h|hx)\b',
+  # Intel Core Ultra 7/9, Series 3 (Panther Lake) and later, incl. X7/X9
+  'ultra\s*x?[79][\s-]*[3-4]\d\d[a-z]*\b',
+  # AMD Ryzen AI 7/9 300-series and later, incl. PRO, HX and Max: 350, 365, HX 370, Max+ 395...
+  'ryzen\s*ai\s*(max\+?|[79])\s*(pro\s*)?(hx\s*)?[3-4]\d\d\b',
+]
+# Plain-English version of cpu_allowed, shown in alerts. Update it if you change the list.
+cpu_description = "Core Ultra 7/9 Series 2 or newer (V/H/HX), or Ryzen AI 7/9 300-series or newer"
+
+# A listing whose title contains any of these words is skipped.
+exclude_keywords = [
+  # not Windows on x86
+  "snapdragon", "qualcomm", "x elite", "x plus", "chromebook", "chrome os", "chromeos", "macbook", "linux", "ubuntu",
+  # not new
+  "refurbished", "refurb", "renewed", "reconditioned", "recertified", "open box", "open-box", "used", "pre-owned",
+  # third-party "upgraded" resellers (Newegg tags these "Upgraded Model")
+  "upgraded", "upgraded model", "customized",
+  # not a laptop
+  "desktop", "monitor", "mini pc", "all-in-one", "tower",
+]
+# Newegg marketplace (third-party) sellers are mostly the "upgraded" resellers.
+exclude_marketplace_sellers = true
+
+[costco]
+# Your purchase. If a deal post shows this exact model cheaper at Costco before the
+# price-adjustment deadline, you get a separate "price drop" alert.
+model = "A16-52MT-91B0"
+model_keywords = ["A16-52MT"]
+purchase_price = 899.99
+price_adjustment_deadline = "2026-10-25"
+
+# Costco blocks automated checks, so these dates send a "go look at Costco.com" reminder.
+[[reminders]]
+date = "2026-10-18"
+title = "Reminder: check Costco.com laptops - price-adjustment window closes Oct 25"
+note = "One week left to get a price adjustment on your Acer."
+
+[[reminders]]
+date = "2026-11-20"
+title = "Reminder: Costco Black Friday laptop deals"
+note = "Costco's Black Friday online deals usually start around now."
+
+[[reminders]]
+date = "2026-11-30"
+title = "Reminder: Cyber Monday - check Costco.com laptops"
+note = "It's Cyber Monday."
+
+[[reminders]]
+date = "2026-12-17"
+title = "Reminder: one week left to return the Acer"
+note = "Last call: the Costco return window closes Dec 24."
+
+[alerts]
+# Your GitHub username. Every alert @-mentions you, which makes sure GitHub emails you.
+github_username = "dfischel"
+# If a source fails this many runs in a row, you get one "source broken" alert.
+# At every 3 hours, 8 runs is about a day.
+source_failure_threshold = 8
+
+[politeness]
+user_agent = "laptop-deal-monitor/1.0 (personal price alert; +https://github.com/dfischel/laptop-deal-search)"
+delay_seconds = 3              # wait between requests to the same site
+
+[sources.slickdeals]
+enabled = true
+url = "https://feeds.feedburner.com/SlickdealsnetFP"   # official front-page feed
+
+[sources.dealnews]
+enabled = true
+url = "https://www.dealnews.com/c39/Computers/Laptops/?rss=1"
+
+[sources.newegg]
+enabled = true
+# One search page per query, 3 seconds apart.
+queries = [
+  "laptop core ultra 7 32GB 1TB",
+  "laptop core ultra 9 32GB 1TB",
+  "laptop ryzen ai 32GB 1TB",
+]

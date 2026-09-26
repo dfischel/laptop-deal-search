@@ -1,0 +1,26 @@
+name: Probe sources
+
+# Run by hand (Actions tab -> Probe sources -> Run workflow) to check that every
+# deal source still returns data from GitHub's servers.
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - run: python tools/probe_sources.py
+
+      - run: python -m unittest -v
