@@ -38,7 +38,9 @@ STORAGE_SIZES = {128, 256, 512, 1000, 1024, 2000, 2048, 4000, 4096}
 STORAGE_WORDS = re.compile(r"^[\s,:/-]*(pcie\s*(gen\s*\d)?\s*)?(ssd|nvme|storage|emmc|hdd|m\.2|ufs|rom|flash|solid)", re.I)
 RAM_WORDS = re.compile(r"^[\s,:/-]*(\(?\d+\s*x\s*\d+\s*GB\)?\s*)?(ram|memory|lpddr|ddr|unified|soldered)", re.I)
 VRAM_WORDS_AFTER = re.compile(r"^[\s,:/-]*(gddr|vram|graphics|video)", re.I)
-GPU_BEFORE = re.compile(r"(rtx|gtx|rx|arc|geforce|radeon)\s*[a-z]?\s*\d{3,4}\w*\s*(laptop\s*gpu)?\s*[,:-]?\s*$", re.I)
+# "RTX 4060 8GB" is graphics memory; "RTX 5070, 16GB DDR5" is system RAM, so only an
+# unseparated number right after the GPU name counts as graphics memory.
+GPU_BEFORE = re.compile(r"(rtx|gtx|rx|arc|geforce|radeon)\s*[a-z]?\s*\d{3,4}\w*\s*(laptop\s*gpu)?\s*$", re.I)
 HDD_AFTER = re.compile(r"^[\s,:/-]*(hdd|hard\s*drive|sata\s*hdd|\d+\s*rpm)", re.I)
 
 
@@ -47,7 +49,9 @@ def parse_ram_gb(text: str) -> int | None:
     for m in GB_RE.finditer(text):
         value = int(m.group(1))
         before, after = text[max(0, m.start() - 25):m.start()], text[m.end():m.end() + 30]
-        if STORAGE_WORDS.search(after) or VRAM_WORDS_AFTER.search(after) or GPU_BEFORE.search(before):
+        if STORAGE_WORDS.search(after) or VRAM_WORDS_AFTER.search(after):
+            continue
+        if GPU_BEFORE.search(before) and not RAM_WORDS.search(after):
             continue
         if value in RAM_SIZES or (RAM_WORDS.search(after) and value <= 128):
             found.append(value)
@@ -55,6 +59,7 @@ def parse_ram_gb(text: str) -> int | None:
 
 
 def parse_storage_gb(text: str) -> int | None:
+    """Storage in decimal GB: "1TB", "1 TB" and "1024GB" all come back as 1000."""
     found = []
     for m in TB_RE.finditer(text):
         if not HDD_AFTER.search(text[m.end():m.end() + 20]):
@@ -64,7 +69,7 @@ def parse_storage_gb(text: str) -> int | None:
         if HDD_AFTER.search(after) or RAM_WORDS.search(after):
             continue
         if STORAGE_WORDS.search(after) or value in STORAGE_SIZES:
-            found.append(value)
+            found.append(value // 1024 * 1000 if value >= 1024 and value % 1024 == 0 else value)
     return max(found) if found else None
 
 
@@ -176,6 +181,10 @@ def evaluate(listing, criteria: dict, costco: dict, price_adjustment_open: bool)
         failures.append(f"excluded keyword: {excluded[0]}")
     if listing.marketplace and criteria["exclude_marketplace_sellers"]:
         failures.append("third-party marketplace seller")
+    # Resellers put "professionally upgraded" in descriptions too, not just titles.
+    reseller = [p for p in criteria["reseller_phrases"] if p.lower() in f"{title_l} | {text.lower()}"]
+    if reseller:
+        failures.append(f"third-party reseller: {reseller[0]}")
 
     if listing.price is None:
         failures.append("no single price")

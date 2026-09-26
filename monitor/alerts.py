@@ -18,11 +18,13 @@ class Alerter:
         self.token = os.environ.get("GITHUB_TOKEN")
         self.dry_run = dry_run or not (self.repo and self.token)
         self.mention = config["alerts"].get("github_username", "")
+        self.sent: list[tuple[str, str, list[str]]] = []  # every issue this run, sent or not (for tests and dry runs)
 
     def open_issue(self, title: str, body: str, labels: list[str]) -> None:
         if self.mention:
             # an @mention guarantees an email even if repo "watch" notifications are off
             body += f"\n\n---\n@{self.mention}"
+        self.sent.append((title, body, labels))
         if self.dry_run:
             print(f"\n[dry run] would open issue: {title}\n  labels: {labels}\n" + "\n".join(f"  | {line}" for line in body.splitlines()))
             return
@@ -46,6 +48,20 @@ class Alerter:
         )
         response.raise_for_status()
         print(f"Disabled workflow {workflow_file}")
+
+    def keep_workflow_enabled(self, workflow_file: str) -> None:
+        """Belt and braces for GitHub's 60-day inactivity shutoff (the per-run heartbeat commit is the main defense).
+        Re-enabling an already-enabled workflow is harmless. A failure here is logged, not fatal."""
+        if self.dry_run:
+            return
+        try:
+            requests.put(
+                f"{API}/repos/{self.repo}/actions/workflows/{workflow_file}/enable",
+                headers=self._headers(),
+                timeout=30,
+            ).raise_for_status()
+        except requests.RequestException as exc:
+            print(f"warning: couldn't re-enable workflow: {exc}")
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github+json"}
@@ -159,6 +175,48 @@ The site may be down, have changed its layout, or started blocking bots. To chec
 
 You'll get this alert again only if the source recovers and then breaks again."""
     return title, body
+
+
+def health_section(heartbeat: dict) -> str:
+    rows = ["| Source | Status | Listings parsed |", "|---|---|---|"]
+    for name, info in heartbeat["sources"].items():
+        status = info["status"]
+        if status == "FAILED":
+            status = f"**FAILED** {info['consecutive_failures']}x: {info['error'][:120]}"
+        rows.append(f"| {name} | {status} | {info.get('listings', '-')} |")
+    return "\n".join(rows)
+
+
+def canary_issue(listing, verdict, config: dict, today: date, heartbeat: dict) -> tuple[str, str]:
+    _, deal_body = deal_issue(listing, verdict, config, today)
+    body = f"""This is the weekly **canary**, a fake listing pushed through the real pipeline: price and spec
+parsing, matching, dedup, and this email. It proves the monitor is alive and able to alert.
+
+**If a week goes by without one of these, the monitor has stopped.** See "Is it still running?" in the README.
+
+### Source health this run
+{health_section(heartbeat)}
+
+<details><summary>What the canary alert looked like (same format as a real deal)</summary>
+
+{deal_body}
+</details>
+
+Close this issue."""
+    return f"[Canary] Weekly check-in {today.isoformat()}: monitor is alive", body
+
+
+def canary_failed_issue(listing, verdict) -> tuple[str, str]:
+    reasons = "".join(f"\n- {failure}" for failure in verdict.failures)
+    body = f"""The weekly canary, a fake listing built to match your criteria, **did not match**. Reasons:
+{reasons}
+
+Listing tested: `{listing.title}`
+
+Either `config.toml` was edited so the canary's specs no longer qualify (for example, the Core Ultra 9 288V
+was removed from `cpu_allowed`), or the spec parsing is broken, in which case **real deals may be missed too**.
+Run `python -m unittest` or the "Probe sources" workflow to narrow it down."""
+    return "Monitor problem: the weekly canary failed to match", body
 
 
 def finished_issue(config: dict) -> tuple[str, str]:

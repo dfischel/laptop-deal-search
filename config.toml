@@ -41,6 +41,12 @@ exclude_keywords = [
 ]
 # Newegg marketplace (third-party) sellers are mostly the "upgraded" resellers.
 exclude_marketplace_sellers = true
+# Phrases resellers use when they've swapped in RAM/SSD themselves. Checked in the title AND
+# the description, so a listing is skipped even if only the fine print says it.
+reseller_phrases = [
+  "professionally upgraded", "upgraded by", "upgraded to", "seller upgraded", "customized by",
+  "custom configured by", "3rd party", "third-party seller",
+]
 
 [costco]
 # Your purchase. If a deal post shows this exact model cheaper at Costco before the
@@ -75,20 +81,27 @@ note = "Last call: the Costco return window closes Dec 24."
 # Your GitHub username. Every alert @-mentions you, which makes sure GitHub emails you.
 github_username = "dfischel"
 # If a source fails this many runs in a row, you get one "source broken" alert.
-# At every 3 hours, 8 runs is about a day.
-source_failure_threshold = 8
+# "Fails" includes answering with a page that has no listings (a block or a redesign),
+# not just connection errors. At every 3 hours, 3 runs is about 9 hours.
+source_failure_threshold = 3
 
 [politeness]
 user_agent = "laptop-deal-monitor/1.0 (personal price alert; +https://github.com/dfischel/laptop-deal-search)"
 delay_seconds = 3              # wait between requests to the same site
 
+# Health checks, per source. A run where a source returns fewer than min_listings, or
+# fewer than min_priced_fraction of its listings have a price, counts as a failure.
+# Normal numbers: Slickdeals 25, DealNews 25, Newegg ~110 (nearly all priced).
+
 [sources.slickdeals]
 enabled = true
 url = "https://feeds.feedburner.com/SlickdealsnetFP"   # official front-page feed
+min_listings = 10
 
 [sources.dealnews]
 enabled = true
 url = "https://www.dealnews.com/c39/Computers/Laptops/?rss=1"
+min_listings = 10
 
 [sources.newegg]
 enabled = true
@@ -98,3 +111,11 @@ queries = [
   "laptop core ultra 9 32GB 1TB",
   "laptop ryzen ai 32GB 1TB",
 ]
+min_listings = 20
+min_priced_fraction = 0.8
+
+[canary]
+# Once a week a fake listing that always matches is pushed through the real pipeline
+# (matching -> dedup -> alert email). If the weekly "[Canary]" email stops arriving,
+# the monitor is dead, even if nothing else looks wrong.
+enabled = true

@@ -1,0 +1,2 @@
+# Saved site responses: keep the bytes exactly as downloaded, and don't show them in diffs.
+tests/fixtures/** -text -diff linguist-generated

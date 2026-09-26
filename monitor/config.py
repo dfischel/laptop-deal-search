@@ -7,12 +7,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.toml"
 STATE_PATH = ROOT / "state.json"
+HEARTBEAT_PATH = ROOT / "heartbeat.json"
 
 EMPTY_STATE = {
-    "alerted": {},          # listing id -> {title, price, url, date}; never alert on these again
+    "alerted": {},          # "url|price" -> {title, price, source, date}; never alert on these again
     "reminders_sent": [],   # reminder dates already sent
     "source_failures": {},  # source name -> consecutive failed runs
-    "last_keepalive": None, # see __main__.keepalive
+    "last_canary_week": None,
     "finished": False,
 }
 
@@ -32,4 +33,11 @@ def load_state(path: Path = STATE_PATH) -> dict:
 def save_state(state: dict, path: Path = STATE_PATH) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
+def save_heartbeat(heartbeat: dict, path: Path = HEARTBEAT_PATH) -> None:
+    """Written and committed every run: proof of life, and keeps GitHub from pausing the schedule."""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(heartbeat, f, indent=2)
         f.write("\n")

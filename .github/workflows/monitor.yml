@@ -2,7 +2,7 @@ name: Laptop deal monitor
 
 on:
   schedule:
-    # Times are UTC (5 hours ahead of US Eastern, 8 ahead of Pacific).
+    # Times are UTC (4 hours ahead of US Eastern until Nov 1, then 5).
     # Every 3 hours, all season:
     - cron: "7 */3 * * *"
     # Plus hourly over Black Friday / Cyber Monday, Nov 20 - Dec 5:
@@ -10,15 +10,27 @@ on:
     - cron: "37 * 1-5 12 *"
   workflow_dispatch:
     inputs:
+      dry_run:
+        description: "Dry run: format alerts in the log but send nothing and save nothing"
+        type: boolean
+        default: false
+      max_price:
+        description: "Temporary price limit for this run only (blank = use config.toml)"
+        type: string
+        default: ""
+      canary:
+        description: "Send the canary now, even if this week's was already sent"
+        type: boolean
+        default: false
       test_alert:
-        description: "Also send a test alert (to check that emails arrive)"
+        description: "Also send a plain test alert"
         type: boolean
         default: false
 
 permissions:
-  contents: write   # commit state.json (which deals you've already been alerted about)
+  contents: write   # commit heartbeat.json and state.json
   issues: write     # open alert issues
-  actions: write    # switch this workflow off after the return deadline
+  actions: write    # keep this workflow enabled, and switch it off after the return deadline
 
 concurrency:
   group: monitor
@@ -41,16 +53,33 @@ jobs:
       - name: Check for deals
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python -m monitor ${{ inputs.test_alert && '--test-alert' || '' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          MAX_PRICE: ${{ inputs.max_price }}
+          CANARY: ${{ inputs.canary }}
+          TEST_ALERT: ${{ inputs.test_alert }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "$MAX_PRICE" ]; then args+=(--max-price "$MAX_PRICE"); fi
+          if [ "$CANARY" = "true" ]; then args+=(--canary); fi
+          if [ "$TEST_ALERT" = "true" ]; then args+=(--test-alert); fi
+          python -m monitor "${args[@]}"
 
-      - name: Save state
+      # Runs even if the check failed. heartbeat.json changes every run, so this commits
+      # every run: that's what stops GitHub pausing the schedule for "inactivity".
+      - name: Commit heartbeat and state
         if: always()
         run: |
-          [ -f state.json ] || exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state.json
-          if git diff --cached --quiet; then echo "No state change"; exit 0; fi
-          git commit -m "Update monitor state"
-          git pull --rebase
-          git push
+          for f in heartbeat.json state.json; do
+            if [ -f "$f" ]; then git add "$f"; fi
+          done
+          if git diff --cached --quiet; then echo "Nothing to commit (dry run?)"; exit 0; fi
+          git commit -m "Heartbeat $(date -u +%Y-%m-%dT%H:%MZ)"
+          for attempt in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            sleep 5
+          done
+          echo "::error::Could not push heartbeat after 3 attempts"
+          exit 1
