@@ -5,7 +5,7 @@
   "reminders_sent": [],
   "source_failures": {
     "dealnews": 0,
-    "newegg": 0,
+    "newegg": 1,
     "slickdeals": 0
   }
 }
