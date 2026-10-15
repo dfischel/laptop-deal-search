@@ -1,5 +1,5 @@
 {
-  "last_run_utc": "2026-10-15T16:53:07+00:00",
+  "last_run_utc": "2026-10-15T21:17:32+00:00",
   "max_price": 850,
   "sources": {
     "slickdeals": {
@@ -12,11 +12,11 @@
     },
     "newegg": {
       "status": "FAILED",
-      "consecutive_failures": 9,
+      "consecutive_failures": 10,
       "error": "HTTPError: 403 Client Error: Forbidden for url: https://www.newegg.com/p/pl?d=laptop+core+ultra+7+32GB+1TB&Order=1&N=8000"
     }
   },
   "alerts_sent": 0,
   "canary": "not due",
-  "run_url": "https://github.com/dfischel/laptop-deal-search/actions/runs/38772670497"
+  "run_url": "https://github.com/dfischel/laptop-deal-search/actions/runs/38808718955"
 }
