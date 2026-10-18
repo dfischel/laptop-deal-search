@@ -2,10 +2,12 @@
   "alerted": {},
   "finished": false,
   "last_canary_week": "2026-W42",
-  "reminders_sent": [],
+  "reminders_sent": [
+    "2026-10-18"
+  ],
   "source_failures": {
     "dealnews": 0,
-    "newegg": 20,
+    "newegg": 21,
     "slickdeals": 0
   }
 }
