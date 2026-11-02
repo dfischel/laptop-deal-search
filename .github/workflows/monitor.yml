@@ -2,12 +2,10 @@ name: Laptop deal monitor
 
 on:
   schedule:
-    # Times are UTC (4 hours ahead of US Eastern until Nov 1, then 5).
-    # Every 3 hours, all season:
-    - cron: "7 */3 * * *"
-    # Plus hourly over Black Friday / Cyber Monday, Nov 20 - Dec 5:
-    - cron: "37 * 20-30 11 *"
-    - cron: "37 * 1-5 12 *"
+    # Hourly, at 7 past the hour (times are UTC). GitHub skips or delays some scheduled runs
+    # when it's busy (about half of them, so far), so asking for hourly gets roughly every 2 hours.
+    # Free: Actions time isn't metered for public repos. Each run takes about 25 seconds.
+    - cron: "7 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:

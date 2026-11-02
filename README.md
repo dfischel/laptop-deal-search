@@ -64,7 +64,7 @@ To check directly:
    ```powershell
    gh run list --workflow monitor.yml --repo dfischel/laptop-deal-search --limit 5
    ```
-   Runs should be at most about 3 hours apart. Or open [`heartbeat.json`](heartbeat.json) on github.com: it's
+   Runs should usually be 1-2 hours apart, occasionally more (GitHub skips some). Or open [`heartbeat.json`](heartbeat.json) on github.com: it's
    rewritten on every run with the time, what each deal site returned, and a link to the run's log.
 
 **Why the schedule could stop:** GitHub pauses scheduled workflows in a repo with no activity for 60 days, and
@@ -88,19 +88,20 @@ weekly canary says so.
 
 ## Changing the schedule
 
-The schedule is in **[`.github/workflows/monitor.yml`](.github/workflows/monitor.yml)**, in the `cron:` lines.
+The schedule is in **[`.github/workflows/monitor.yml`](.github/workflows/monitor.yml)**, in the `cron:` line.
 Edit it the same way as the config.
 
-Cron times are in **UTC**: 4 hours ahead of US Eastern until Nov 1, then 5. The five fields are
-`minute hour day-of-month month day-of-week`:
+It's currently `"7 * * * *"`: **every hour, at 7 minutes past**. The five fields are
+`minute hour day-of-month month day-of-week`, and times are in **UTC** (5 hours ahead of US Eastern from
+Nov 1). For example, `"7 */3 * * *"` means every 3 hours, and `"7 */6 * * *"` every 6.
 
-| Line | Meaning |
-|---|---|
-| `"7 */3 * * *"` | 7 minutes past every 3rd hour, every day (the normal schedule) |
-| `"37 * 20-30 11 *"` | 37 minutes past every hour, Nov 20-30 |
-| `"37 * 1-5 12 *"` | 37 minutes past every hour, Dec 1-5 |
+**GitHub doesn't run every scheduled run.** When it's busy it starts runs late or skips them; so far only
+about half of them have actually run, so hourly works out to roughly every 2 hours. That's why the schedule
+asks for hourly.
 
-For example, `"7 */6 * * *"` means every 6 hours. GitHub sometimes starts scheduled runs a few minutes late.
+**Cost:** nothing. GitHub doesn't charge for Actions time on public repos, and each run takes about 25
+seconds. If you ever make the repo private, the free plan includes 2,000 minutes a month. Hourly would use
+about 720 of them, because GitHub counts each run as at least a minute.
 
 ## Testing it
 

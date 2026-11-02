@@ -82,7 +82,7 @@ note = "Last call: the Costco return window closes Dec 24."
 github_username = "dfischel"
 # If a source fails this many runs in a row, you get one "source broken" alert.
 # "Fails" includes answering with a page that has no listings (a block or a redesign),
-# not just connection errors. At every 3 hours, 3 runs is about 9 hours.
+# not just connection errors. With hourly runs (some skipped by GitHub), 3 runs is about 3-6 hours.
 source_failure_threshold = 3
 
 [politeness]
