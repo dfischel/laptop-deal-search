@@ -79,6 +79,11 @@ def fetch_dealnews(cfg: dict, http: PoliteSession) -> list[Listing]:
     return parse_feed("dealnews", http.get(cfg["url"]).content)
 
 
+def fetch_dealnews_newegg(cfg: dict, http: PoliteSession) -> list[Listing]:
+    # Replaces scraping Newegg directly, which blocks GitHub's servers (403 since Oct 13, 2026).
+    return parse_feed("dealnews_newegg", http.get(cfg["url"]).content)
+
+
 # ---------- Newegg search pages ----------
 
 NEWEGG_SEARCH = "https://www.newegg.com/p/pl"
@@ -186,6 +191,7 @@ def check_health(source: str, listings: list[Listing], cfg: dict) -> None:
 FETCHERS = {
     "slickdeals": fetch_slickdeals,
     "dealnews": fetch_dealnews,
+    "dealnews_newegg": fetch_dealnews_newegg,
     "newegg": fetch_newegg,
 }
 SOURCES = list(FETCHERS)

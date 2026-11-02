@@ -103,8 +103,17 @@ enabled = true
 url = "https://www.dealnews.com/c39/Computers/Laptops/?rss=1"
 min_listings = 10
 
-[sources.newegg]
+[sources.dealnews_newegg]
+# DealNews's Newegg computer deals: covers Newegg now that Newegg blocks GitHub's servers.
+# Holds about a week of deals, so infrequent runs don't miss anything.
 enabled = true
+url = "https://www.dealnews.com/c39/Computers/s504/Newegg/?rss=1&sort=time"
+min_listings = 5
+
+[sources.newegg]
+# Off: Newegg answers GitHub's servers with "403 Forbidden" (blocked since Oct 13, 2026).
+# It still works from a home connection, so the code is kept in case that changes.
+enabled = false
 # One search page per query, 3 seconds apart.
 queries = [
   "laptop core ultra 7 32GB 1TB",
