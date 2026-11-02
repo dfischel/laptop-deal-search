@@ -137,6 +137,20 @@ class SilentFailure(unittest.TestCase):
         _, heartbeat = do_run(fresh_state(), http)
         self.assertEqual(heartbeat["sources"]["newegg"], {"status": "disabled"})
 
+    def test_reenabled_source_still_broken_alerts_again(self):
+        # Newegg was disabled after 80 straight failures. If re-enabled while still blocked,
+        # it must alert at the threshold again, not count on silently from 81.
+        state = fresh_state()
+        state["source_failures"]["newegg"] = 80
+        do_run(state)  # disabled: count forgotten
+        self.assertNotIn("newegg", state["source_failures"])
+        blocked = FakeHttp({NEWEGG: requests.HTTPError("403 Client Error: Forbidden")})
+        alerts = []
+        for _ in range(CONFIG["alerts"]["source_failure_threshold"]):
+            sent, _ = do_run(state, blocked, config=CONFIG_WITH_NEWEGG)
+            alerts += [title for title, _, issue_labels in sent if "source-broken" in issue_labels]
+        self.assertEqual(len(alerts), 1)
+
 
 class NeweggScraperIfReenabled(unittest.TestCase):
     """Direct Newegg scraping is off (Newegg blocks GitHub's servers), but its HTML health checks stay tested."""

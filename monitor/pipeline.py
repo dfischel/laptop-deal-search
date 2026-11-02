@@ -61,6 +61,8 @@ def fetch_all(config: dict, state: dict, alerter: alerts.Alerter, http, heartbea
         source_cfg = config["sources"].get(name, {})
         if not source_cfg.get("enabled", True):
             heartbeat["sources"][name] = {"status": "disabled"}
+            # forget old failures, so if it's re-enabled and still broken, the alert fires again at the threshold
+            state["source_failures"].pop(name, None)
             continue
         try:
             found = fetch_source(name, source_cfg, http)
