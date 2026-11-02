@@ -91,7 +91,7 @@ delay_seconds = 3              # wait between requests to the same site
 
 # Health checks, per source. A run where a source returns fewer than min_listings, or
 # fewer than min_priced_fraction of its listings have a price, counts as a failure.
-# Normal numbers: Slickdeals 25, DealNews 25, Newegg ~110 (nearly all priced).
+# Normal numbers: Slickdeals 25, DealNews 25, DealNews Newegg ~20, Newegg (when on) ~100.
 
 [sources.slickdeals]
 enabled = true

@@ -152,9 +152,17 @@ Afterwards you can delete the repo (Settings → scroll to the bottom → Delete
 |---|---|---|
 | Slickdeals | Official front-page RSS feed | 25 items |
 | DealNews | Laptops RSS feed | 25 items |
-| Newegg | Three searches, sold by Newegg, lowest price first | ~36 per search |
+| DealNews: Newegg | DealNews's feed of Newegg computer deals | ~20 items (about a week's worth) |
+| ~~Newegg~~ (off) | Direct search of Newegg's site | blocked |
+
+**Newegg** was searched directly until Newegg started blocking GitHub's servers ("403 Forbidden",
+consistently since Oct 13, 2026; the same search still works from a home connection). Newegg's deals now
+come through DealNews instead. That catches the Newegg deals DealNews's editors post, not every price change
+in Newegg's catalog. The direct-search code is still there and tested; `enabled = true` under
+`[sources.newegg]` in `config.toml` turns it back on if the block ever lifts. Run the **Probe sources**
+workflow first to check.
 
 Costco.com and BestBuy.com block bots, so they aren't checked directly. Reddit's robots.txt forbids
-automated access, so it isn't used. Newegg searches are limited to items sold by Newegg itself: without that
-filter the cheapest results are all third-party resellers. Every request respects the site's robots.txt,
-identifies itself honestly, and waits 3 seconds between requests to the same site.
+automated access, so it isn't used. Every request respects the site's robots.txt, identifies itself
+honestly, and waits 3 seconds between requests to the same site. Getting around a site's bot blocking by
+pretending to be a web browser is deliberately not done.

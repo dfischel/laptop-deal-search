@@ -8,6 +8,7 @@ Two kinds of checks:
 """
 
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from monitor.config import load_config
@@ -74,6 +75,39 @@ class DealNewsFixture(unittest.TestCase):
         self.assertEqual(victus.price, 875.0)
         self.assertEqual(victus.retailer, "Best Buy")
         self.assertEqual(self.listings[0].retailer, "Amazon")
+
+
+class DealNewsNeweggFixture(unittest.TestCase):
+    """DealNews's Newegg computer deals (saved 2026-11-02), the replacement for scraping Newegg directly."""
+
+    def setUp(self):
+        self.listings = parse_feed("dealnews_newegg", read_bytes("dealnews_newegg.xml"))
+
+    def test_structure(self):
+        self.assertEqual(len(self.listings), 20)
+        self.assertEqual(sum(listing.price is not None for listing in self.listings), 18)
+        for listing in self.listings:
+            self.assertEqual(listing.retailer, "Newegg")
+            self.assertTrue(listing.url.startswith("https://www.dealnews.com/"), listing.url)
+        check_health("dealnews_newegg", self.listings, CONFIG["sources"]["dealnews_newegg"])
+
+    def test_pinned_listing_specs_come_from_description(self):
+        msi = next(listing for listing in self.listings if "22321616" in listing.id)
+        self.assertEqual(msi.title, 'MSI Vector 16 HX AI Core Ultra 7 255HX 16" Laptop for $1,599 + free shipping')
+        self.assertEqual(msi.price, 1599.0)
+        self.assertIn("16GB DDR5 memory & 512GB NVMe SSD", msi.text)
+        # The title doesn't state RAM or storage; the description does (and its "12GB video
+        # memory" must not be read as RAM). Right CPU, but 16GB/512GB, so no alert even at $2,000.
+        criteria = {**CONFIG["criteria"], "max_price": 2000}
+        verdict = evaluate(msi, criteria, CONFIG["costco"], True)
+        self.assertIsNone(verdict.kind)
+        self.assertEqual(verdict.failures, ["RAM 16GB", "storage 512GB"])
+        self.assertTrue(verdict.specs["thunderbolt"])  # "2 Thunderbolt 5 ports" in the description
+
+    def test_same_deal_in_both_dealnews_feeds_is_one_listing(self):
+        deal = self.listings[0]
+        from_laptops_feed = replace(deal, url=deal.url.replace("iref=rss-c39", "iref=rss-c39-laptops"))
+        self.assertEqual(deal.dedup_key, from_laptops_feed.dedup_key)
 
 
 class NeweggFixture(unittest.TestCase):

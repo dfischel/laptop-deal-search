@@ -4,6 +4,7 @@ import contextlib
 import copy
 import io
 import json
+import re
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,7 +20,9 @@ from monitor.pipeline import new_heartbeat, process_listings, run
 from monitor.sources import Listing
 
 FIXTURES = Path(__file__).parent / "fixtures"
-CONFIG = load_config()
+CONFIG = load_config()  # the deployed config: direct Newegg scraping is off
+CONFIG_WITH_NEWEGG = copy.deepcopy(CONFIG)  # for tests of the Newegg scraper, kept in case it's re-enabled
+CONFIG_WITH_NEWEGG["sources"]["newegg"]["enabled"] = True
 NOW = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)  # a Monday, inside the return window
 
 CHALLENGE_PAGE = b"""<!DOCTYPE html><html><head><title>Just a moment...</title></head>
@@ -27,20 +30,24 @@ CHALLENGE_PAGE = b"""<!DOCTYPE html><html><head><title>Just a moment...</title><
 EMPTY_FEED = b"""<?xml version="1.0"?><rss version="2.0"><channel><title>Feed</title></channel></rss>"""
 
 
-class FakeHttp:
-    """Serves fixture files by URL. A route can be overridden with bytes or an exception."""
+# URL fragments that pick out each source's request
+SLICKDEALS, DEALNEWS, DEALNEWS_NEWEGG, NEWEGG = "feedburner.com", "Computers/Laptops", "s504/Newegg", "newegg.com/p/pl"
 
-    def __init__(self, **overrides):
-        self.routes = {
-            "feedburner.com": (FIXTURES / "slickdeals.xml").read_bytes(),
-            "dealnews.com": (FIXTURES / "dealnews.xml").read_bytes(),
-            "newegg.com": (FIXTURES / "newegg_search.html").read_bytes(),
-        }
-        self.routes.update({k.replace("_", "."): v for k, v in overrides.items()})
+
+class FakeHttp:
+    """Serves fixture files by URL. `overrides` maps a URL fragment to bytes or an exception."""
+
+    def __init__(self, overrides=None):
+        self.routes = list((overrides or {}).items()) + [
+            (SLICKDEALS, (FIXTURES / "slickdeals.xml").read_bytes()),
+            (DEALNEWS, (FIXTURES / "dealnews.xml").read_bytes()),
+            (DEALNEWS_NEWEGG, (FIXTURES / "dealnews_newegg.xml").read_bytes()),
+            (NEWEGG, (FIXTURES / "newegg_search.html").read_bytes()),
+        ]
 
     def get(self, url):
-        for host, body in self.routes.items():
-            if host in url:
+        for fragment, body in self.routes:
+            if fragment in url:
                 if isinstance(body, Exception):
                     raise body
                 return SimpleNamespace(content=body, text=body.decode("utf-8", "replace"), url=url)
@@ -72,31 +79,33 @@ class HealthyRun(unittest.TestCase):
         self.assertEqual(heartbeat["sources"], {
             "slickdeals": {"status": "ok", "listings": 25},
             "dealnews": {"status": "ok", "listings": 25},
-            "newegg": {"status": "ok", "listings": 36},
+            "dealnews_newegg": {"status": "ok", "listings": 20},
+            "newegg": {"status": "disabled"},
         })
-        self.assertEqual(state["source_failures"], {"slickdeals": 0, "dealnews": 0, "newegg": 0})
+        self.assertEqual(state["source_failures"], {"slickdeals": 0, "dealnews": 0, "dealnews_newegg": 0})
+
+
+def blank_titles(feed: bytes) -> bytes:
+    return re.sub(rb"<title>.*?</title>", b"<title></title>", feed, flags=re.S)
 
 
 class SilentFailure(unittest.TestCase):
     """A blocked or redesigned source must count as broken, never as "no deals today"."""
 
     BROKEN = {
-        "challenge page instead of results": {"newegg_com": CHALLENGE_PAGE},
-        "HTML challenge instead of a feed": {"feedburner_com": CHALLENGE_PAGE},
-        "valid feed with zero items": {"dealnews_com": EMPTY_FEED},
-        "listings present but prices gone (redesign)": {
-            "newegg_com": (FIXTURES / "newegg_search.html").read_bytes().replace(b"price-current", b"price-renamed")},
-        "listings present but titles gone (redesign)": {
-            "newegg_com": (FIXTURES / "newegg_search.html").read_bytes().replace(b"item-title", b"item-heading")},
-        "connection error": {"dealnews_com": requests.ConnectionError("connection refused")},
-        "HTTP 403": {"feedburner_com": requests.HTTPError("403 Client Error: Forbidden")},
+        "challenge page instead of a feed": {DEALNEWS_NEWEGG: CHALLENGE_PAGE},
+        "HTML challenge from the feed host": {SLICKDEALS: CHALLENGE_PAGE},
+        "valid feed with zero items": {DEALNEWS: EMPTY_FEED},
+        "feed items lost their titles (redesign)": {SLICKDEALS: blank_titles((FIXTURES / "slickdeals.xml").read_bytes())},
+        "connection error": {DEALNEWS: requests.ConnectionError("connection refused")},
+        "HTTP 403 (what Newegg did)": {DEALNEWS_NEWEGG: requests.HTTPError("403 Client Error: Forbidden")},
     }
 
     def test_each_breakage_counts_as_failure(self):
         for description, override in self.BROKEN.items():
             with self.subTest(description):
                 state = fresh_state()
-                _, heartbeat = do_run(state, FakeHttp(**override))
+                _, heartbeat = do_run(state, FakeHttp(override))
                 broken = [name for name, info in heartbeat["sources"].items() if info["status"] == "FAILED"]
                 self.assertEqual(len(broken), 1, heartbeat["sources"])
                 self.assertEqual(state["source_failures"][broken[0]], 1)
@@ -104,24 +113,51 @@ class SilentFailure(unittest.TestCase):
     def test_alerts_once_at_threshold_then_resets_on_recovery(self):
         threshold = CONFIG["alerts"]["source_failure_threshold"]
         state = fresh_state()
-        blocked = FakeHttp(newegg_com=CHALLENGE_PAGE)
+        blocked = FakeHttp({DEALNEWS_NEWEGG: CHALLENGE_PAGE})
         broken_alerts = []
         for _ in range(threshold + 2):
             sent, _ = do_run(state, blocked)
             broken_alerts += [title for title, _, issue_labels in sent if "source-broken" in issue_labels]
         self.assertEqual(len(broken_alerts), 1, "exactly one alert per outage, not one per run")
-        self.assertIn("newegg", broken_alerts[0])
+        self.assertIn("dealnews_newegg", broken_alerts[0])
 
         do_run(state)  # recovers
-        self.assertEqual(state["source_failures"]["newegg"], 0)
+        self.assertEqual(state["source_failures"]["dealnews_newegg"], 0)
         for _ in range(threshold):
             sent, _ = do_run(state, blocked)
         self.assertIn("source-broken", labels(sent), "a second outage alerts again")
 
     def test_other_sources_still_checked_when_one_breaks(self):
-        _, heartbeat = do_run(fresh_state(), FakeHttp(newegg_com=CHALLENGE_PAGE))
+        _, heartbeat = do_run(fresh_state(), FakeHttp({DEALNEWS_NEWEGG: CHALLENGE_PAGE}))
         self.assertEqual(heartbeat["sources"]["slickdeals"]["status"], "ok")
         self.assertEqual(heartbeat["sources"]["dealnews"]["status"], "ok")
+
+    def test_disabled_source_is_never_fetched(self):
+        http = FakeHttp({NEWEGG: AssertionError("disabled source was fetched")})
+        _, heartbeat = do_run(fresh_state(), http)
+        self.assertEqual(heartbeat["sources"]["newegg"], {"status": "disabled"})
+
+
+class NeweggScraperIfReenabled(unittest.TestCase):
+    """Direct Newegg scraping is off (Newegg blocks GitHub's servers), but its HTML health checks stay tested."""
+
+    BROKEN = {
+        "challenge page instead of results": CHALLENGE_PAGE,
+        "listings present but prices gone (redesign)":
+            (FIXTURES / "newegg_search.html").read_bytes().replace(b"price-current", b"price-renamed"),
+        "listings present but titles gone (redesign)":
+            (FIXTURES / "newegg_search.html").read_bytes().replace(b"item-title", b"item-heading"),
+    }
+
+    def test_healthy(self):
+        _, heartbeat = do_run(fresh_state(), config=CONFIG_WITH_NEWEGG)
+        self.assertEqual(heartbeat["sources"]["newegg"], {"status": "ok", "listings": 36})
+
+    def test_each_breakage_counts_as_failure(self):
+        for description, page in self.BROKEN.items():
+            with self.subTest(description):
+                _, heartbeat = do_run(fresh_state(), FakeHttp({NEWEGG: page}), config=CONFIG_WITH_NEWEGG)
+                self.assertEqual(heartbeat["sources"]["newegg"]["status"], "FAILED")
 
 
 def listing(url="https://www.newegg.com/p/N82E1", price=799.99, source="newegg"):
@@ -180,13 +216,14 @@ class Canary(unittest.TestCase):
         self.assertEqual(labels(sent), ["canary"], "again the next week")
 
     def test_canary_goes_through_real_formatting_and_reports_health(self):
-        sent, _ = do_run(fresh_state(), FakeHttp(newegg_com=CHALLENGE_PAGE))
+        sent, _ = do_run(fresh_state(), FakeHttp({DEALNEWS_NEWEGG: CHALLENGE_PAGE}))
         title, body, _ = sent[0]
         self.assertIn("[Canary]", title)
         self.assertIn("| Price | $850.00 |", body)  # built at exactly the price limit
         self.assertIn("| RAM | 32GB |", body)
-        self.assertIn("| newegg | **FAILED** 1x", body)
+        self.assertIn("| dealnews_newegg | **FAILED** 1x", body)
         self.assertIn("| slickdeals | ok | 25 |", body)
+        self.assertIn("| newegg | disabled | - |", body)
 
     def test_canary_that_stops_matching_raises_alarm(self):
         config = copy.deepcopy(CONFIG)
@@ -206,7 +243,9 @@ class Canary(unittest.TestCase):
 
 class PriceOverride(unittest.TestCase):
     def test_2000_fires_on_real_listings(self):
-        config = copy.deepcopy(CONFIG)
+        # The saved feeds have no match even at $2,000, so use the saved Newegg search page,
+        # which has 10 real listings between $850 and $2,000.
+        config = copy.deepcopy(CONFIG_WITH_NEWEGG)
         config["criteria"]["max_price"] = 2000
         state = fresh_state()
         state["last_canary_week"] = "2026-W41"
@@ -249,7 +288,7 @@ class DryRunSmoke(unittest.TestCase):
         output, save_state, save_heartbeat, http_client = self.run_cli("--dry-run")
         self.assertIn("[dry run] would open issue: [Canary]", output)
         self.assertIn("| Price | $850.00 |", output)
-        self.assertIn('"newegg": {\n      "status": "ok",\n      "listings": 36', output)
+        self.assertIn('"dealnews_newegg": {\n      "status": "ok",\n      "listings": 20', output)
         self.assertIn("1 issue(s) formatted, none sent; state not saved", output)
         http_client.post.assert_not_called()
         http_client.put.assert_not_called()
@@ -259,11 +298,11 @@ class DryRunSmoke(unittest.TestCase):
     def test_dry_run_with_price_override(self):
         output, *_ = self.run_cli("--dry-run", "--max-price", "2000")
         self.assertIn("price limit overridden for this run: $2,000.00", output)
-        self.assertIn("11 issue(s) formatted", output)  # 10 real listings + the canary
+        self.assertIn("| Price | $2,000.00 |", output)  # the canary is built at the overridden limit
 
     def test_threshold_alias(self):
         output, *_ = self.run_cli("--dry-run", "--threshold", "2000")
-        self.assertIn("11 issue(s) formatted", output)
+        self.assertIn("| Price | $2,000.00 |", output)
 
     def test_override_does_not_touch_config_file(self):
         before = (Path(__file__).parent.parent / "config.toml").read_bytes()
@@ -286,7 +325,7 @@ class Heartbeat(unittest.TestCase):
         save_heartbeat.assert_called_once()
         heartbeat = save_heartbeat.call_args.args[0]
         self.assertEqual(heartbeat["alerts_sent"], 0)
-        self.assertEqual(heartbeat["sources"]["newegg"]["status"], "ok")
+        self.assertEqual(heartbeat["sources"]["dealnews_newegg"]["status"], "ok")
         json.dumps(heartbeat)  # must be serializable
 
     def test_written_even_when_run_crashes(self):

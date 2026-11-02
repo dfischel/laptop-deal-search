@@ -26,6 +26,7 @@ def main() -> None:
     targets = {
         "slickdeals.xml": config["sources"]["slickdeals"]["url"],
         "dealnews.xml": config["sources"]["dealnews"]["url"],
+        "dealnews_newegg.xml": config["sources"]["dealnews_newegg"]["url"],
         "newegg_search.html": newegg_search_url(config["sources"]["newegg"]["queries"][0]),
         # Same search without the sold-by-Newegg filter: mostly third-party resellers,
         # used to test that they're detected and excluded.
