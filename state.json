@@ -7,7 +7,7 @@
   ],
   "source_failures": {
     "dealnews": 0,
-    "newegg": 80,
+    "dealnews_newegg": 0,
     "slickdeals": 0
   }
 }
