@@ -1,5 +1,5 @@
 {
-  "last_run_utc": "2026-11-03T11:51:32+00:00",
+  "last_run_utc": "2026-11-03T19:27:18+00:00",
   "max_price": 850,
   "sources": {
     "slickdeals": {
@@ -8,7 +8,7 @@
     },
     "dealnews": {
       "status": "ok",
-      "listings": 28
+      "listings": 25
     },
     "dealnews_newegg": {
       "status": "ok",
@@ -20,5 +20,5 @@
   },
   "alerts_sent": 0,
   "canary": "not due",
-  "run_url": "https://github.com/dfischel/laptop-deal-search/actions/runs/41630883081"
+  "run_url": "https://github.com/dfischel/laptop-deal-search/actions/runs/41703369576"
 }
