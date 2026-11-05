@@ -1,5 +1,5 @@
 {
-  "last_run_utc": "2026-11-04T22:35:40+00:00",
+  "last_run_utc": "2026-11-05T03:27:35+00:00",
   "max_price": 850,
   "sources": {
     "slickdeals": {
@@ -20,5 +20,5 @@
   },
   "alerts_sent": 0,
   "canary": "not due",
-  "run_url": "https://github.com/dfischel/laptop-deal-search/actions/runs/41926614767"
+  "run_url": "https://github.com/dfischel/laptop-deal-search/actions/runs/41961713229"
 }
