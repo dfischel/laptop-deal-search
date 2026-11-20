@@ -3,7 +3,8 @@
   "finished": false,
   "last_canary_week": "2026-W47",
   "reminders_sent": [
-    "2026-10-18"
+    "2026-10-18",
+    "2026-11-20"
   ],
   "source_failures": {
     "dealnews": 0,
